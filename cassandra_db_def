@@ -1,0 +1,2 @@
+use demodb;
+CREATE TABLE demopages (site_id text, pageviews int, ts text, PRIMARY KEY ((site_id ), pageviews), ) WITH CLUSTERING ORDER BY (pageviews DESC);
