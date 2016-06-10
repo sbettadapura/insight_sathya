@@ -1,0 +1,8 @@
+Date Of Stop,Time Of Stop,Agency,SubAgency,Description,Location,Latitude,Longitu
+de,Accident,Belts,Personal Injury,Property Damage,Fatal,Commercial License,HAZMA
+T,Commercial Vehicle,Alcohol,Work Zone,State,VehicleType,Year,Make,Model,Color,V
+iolation Type,Charge,Article,Contributed To Accident,Race,Gender,Driver City,Dri
+ver State,DL State,Arrest Type,Geolocation
+
+create keyspace insight_sathya;
+CREATE TABLE violations (date_of_stop text, time_of_stop text, agency text, subagency text, description text, location text, latitude float, longitude float, accdent boolean, belts boolean, personal_injury boolean, property_damage boolean, fatal boolean, commercial_license boolean, hazmat boolean, commercial_vehicle boolean, alcohol boolean, work_zone boolean, state text, vehicle_type text, year int, make text, model text, color text, violation_type text, charge text, article text, contributed_to_accident boolean, race text, gender text, driver_city text, driver_state text, dl_state text, arrest_type text, geo_location text, PRIMARY KEY ((driver_state), driver_city, date_of_stop, time_of_stop)) WITH CLUSTERING ORDER BY (driver_city DESC);
