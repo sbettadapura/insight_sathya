@@ -26,15 +26,12 @@ column_names = ["date_of_stop","time_of_stop","agency","subagency",\
 def csv_to_dict(line):
 	if line.endswith(",") and not line.endswith(",,"):
 		line += ","
+	items = line.split('"')
+	for i in range(len(items)):
+		if ', ' in items[i]:
+			items[i] = items[i].replace(', ', '  ')
+	line = ''.join(items)	
 	items = line.split(',')
-	items[3] += ',' + ' ' + items[4]
-	items[4:] = items[5:]
-	if items[-1] == '':
-		items.pop()
-	if items[-1] != '':
-		items[-2] += ',' + ' ' + items[-1]
-		items.pop()
-
 	for i in range(len(items)):
 		if i in bool_columns:
 			if items[i].lower() == 'yes':
@@ -53,7 +50,4 @@ sc = SparkContext(conf=conf)
 
 file = sc.textFile("hdfs://" + sys.argv[1] + ":9000/"+sys.argv[2])
 lines = file.map(csv_to_dict)
-print "dictionaries from csv"
-for line in lines.collect():
-	print line
 lines.saveToCassandra("insight_sathya", "violations")
