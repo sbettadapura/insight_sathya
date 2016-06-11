@@ -1,0 +1,2 @@
+create keyspace insight_sathya;
+CREATE TABLE querylog (query_type int, ts timestamp, query_text text, PRIMARY KEY (query_type, ts));

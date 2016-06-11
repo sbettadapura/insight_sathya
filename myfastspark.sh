@@ -1,0 +1,1 @@
+$SPARK_HOME/bin/spark-submit --master spark://ec2-52-37-251-31.us-west-2.compute.amazonaws.com:7077 --executor-memory 2000M --driver-memory 2000M --packages org.apache.spark:spark-streaming-kafka_2.10:1.6.1,TargetHolding/pyspark-cassandra:0.3.5 $@
