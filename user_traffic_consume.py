@@ -55,8 +55,7 @@ def create_db_recs(redis_conn, user_req):
 	elif req_type == REQ_TYPE_UPDATE:
 		sub_req_type = user_req["sub_req_type"]
 		if sub_req_type == SUB_REQ_TYPE_UPDATE_CLEAR:
-			pass
-			#db_incident_clear(redis_conn, user_req)
+			db_incident_clear(redis_conn, user_req)
 		else:
 			db_incident_update(redis_conn, user_req, sub_req_type)
 
@@ -147,6 +146,7 @@ def db_incident_update(redis_conn, user_req):
 def db_incident_clear(redis_conn, user_req):
 	#now_ts = datetime.datetime.now().strftime(TS_FMT)
 	found_rand_incident = False
+	noluck = False
 	while not found_rand_incident:
 		rand_route_num = redis_conn.srandmember("route_incidents")
 		for y in redis_conn.smembers("incidents"):
@@ -154,7 +154,7 @@ def db_incident_clear(redis_conn, user_req):
 			user_id = x[0]
 			route_num = int(x[1])
 			rand_loc = int(x[2])
-			sub_update_tye = int(x[3])
+			sub_update_type = int(x[3])
 			ts = ts1 + ' ' + ts2
 			"""
 			if route_num == rand_route_num and \
@@ -165,10 +165,14 @@ def db_incident_clear(redis_conn, user_req):
 			if route_num == rand_route_num:
 				found_rand_incident = True
 				break
-	redis_conn.srem("incidents", \
+		else:
+			found_rand_incident = True
+			noluck = True
+	if not noluck:
+		redis_conn.srem("incidents", \
 			' '.join([user_id, str(route_num), str(rand_loc), \
-				str(sub_update_type), ts]))
-	redis_conn.srem("route_incidents", str(rand_route_num))
+				str(sub_update_type), ""]))
+		redis_conn.srem("route_incidents", str(rand_route_num))
 
 
 redis_host = sys.argv[1]
