@@ -46,8 +46,6 @@ def create_db_recs(redis_conn, user_req):
 	req_type = user_req['req_type']
 	if req_type == REQ_TYPE_REGISTER:
 		db_user_register(redis_conn, user_req)
-		redis_conn.sadd("junk", "1")
-		redis_conn.srem("junk", "1")
 	elif req_type == REQ_TYPE_SIGNOFF:
 		db_user_signoff(redis_conn, user_req)
 	elif req_type == REQ_TYPE_QUERY:
@@ -59,7 +57,7 @@ def create_db_recs(redis_conn, user_req):
 		else:
 			db_incident_update(redis_conn, user_req, sub_req_type)
 
-def notify_user(users):
+def notify_users(users):
 	pass
 
 def notify_single_user(user):
@@ -118,27 +116,29 @@ def db_user_query(redis_conn, user_req):
 	start = randrange(route_start, route_end)
 	end = randrange(start, route_end)
 	if redis_conn.sismember("route_incidents", str(route_num)):
+		pass
+		"""
 		if start <= loc and loc <= end:
 			user_to_be_notified = redis_conn.srandmember("route%d" % route_num)
 			notify_single_user(user_to_be_notified)
+		"""
 
-def db_incident_update(redis_conn, user_req):
+def db_incident_update(redis_conn, user_req, sub_req_type):
 	user_id, ts1, ts2 = redis_conn.srandmember("users").split()
 	ts = ts1 + ' ' + ts2
 	rand_route_num = randrange(get_num_routes(redis_conn))
 	rand_route_id = "route%d" % rand_route_num
 	route_start, route_end = get_route_endpoints(redis_conn, rand_route_num)
 	rand_loc = randrange(route_start, route_end)
-	sub_update_type = random.choice[REQ_UPDATE_ACCIDENT, ROUTE_UPDATE_OTHER]
 	#ts = datetime.datetime.now().strftime(TS_FMT)
 	redis_conn.sadd("incidents", \
 			' '.join([user_id, str(rand_route_num), str(rand_loc), \
-				str(sub_update_type), ""]))
-	redis_conn.sadd("route_incidents", str(route_num))
+				str(sub_req_type), ""]))
+	redis_conn.sadd("route_incidents", str(rand_route_num))
 	users_on_route = redis_conn.smembers(rand_route_id)
 	users_to_be_notified = set()
 	for user in users_on_route:
-		route_num, loc = redis_conn.get(user_id)
+		route_num, loc = map(int, redis_conn.get(user_id).split())
 		if rand_loc - loc >= 1:
 			users_to_be_notified.add(user)
 	notify_users(users_to_be_notified)
@@ -155,7 +155,7 @@ def db_incident_clear(redis_conn, user_req):
 			route_num = int(x[1])
 			rand_loc = int(x[2])
 			sub_update_type = int(x[3])
-			ts = ts1 + ' ' + ts2
+			#ts = ts1 + ' ' + ts2
 			"""
 			if route_num == rand_route_num and \
 				datetime.strptime(now_ts, (TS_FMT)) - \
