@@ -15,7 +15,7 @@ for message in consumer:
 """
 # consume json messages
 # consume json messages
-consumer = KafkaConsumer('json-topic', value_deserializer=lambda m: json.loads(m.decode('ascii')))
+consumer = KafkaConsumer('user_traffic', value_deserializer=lambda m: json.loads(m.decode('ascii')))
 for message in consumer:
     print(message)
 

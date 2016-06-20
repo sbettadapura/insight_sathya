@@ -39,11 +39,12 @@ summed = parsed.map(lambda event: (event['site_id'], 1)).\
                 reduceByKey(lambda x,y: x + y).\
                 map(lambda x: {"site_id": x[0], "ts": str(uuid1()), "pageviews": x[1]})
 
-#print "parsed = "
-#parsed.pprint()
+print "parsed = "
+parsed.pprint()
+print parsed['site_id']
 print "summed = "
 summed.pprint()
-summed.saveToCassandra("demodb", "demopages")
+#summed.saveToCassandra("demodb", "demopages")
 
 stream.start()
 stream.awaitTermination()
