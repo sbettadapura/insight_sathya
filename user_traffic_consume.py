@@ -26,7 +26,7 @@ SUB_REQ_TYPE_UPDATE_ACCIDENT, SUB_REQ_TYPE_UPDATE_OTHER, SUB_REQ_TYPE_UPDATE_CLE
 
 def processPartition(iter):
 	print "before redis connection"
-	redis_conn = redis.StrictRedis(host = redis_spark_host, port = 6597)
+	redis_conn = redis.Redis(host = redis_host, port = 6375, password = 'noredishackers')
 	print "after redis connection"
 	for record in iter:
 		print "before calling create_db_recs"
@@ -36,7 +36,7 @@ def processPartition(iter):
 def processRecord(record):
 	#global POOL
 	#redis_conn = redis.Redis(connection_pool=POOL)
-	redis_conn = redis.Redis(host = redis_spark_host, port = 6597, db = 0)
+	redis_conn = redis.Redis(host = redis_host, port = 6375, db = 0, password = 'noredishackers')
 	create_db_recs(redis_conn, record)
 
 def create_db_recs(redis_conn, user_req):
@@ -216,31 +216,32 @@ def db_incident_clear(redis_conn, user_req):
 		print "noluck ", rand_route_num
 
 
-redis_spark_host = sys.argv[2]
+mytopic = sys.argv[1]
+redis_host = sys.argv[2]
+spark_host = sys.argv[3]
 conf = SparkConf() \
     .setAppName("PySpark Redis Test") \
-    .setMaster("spark://"+redis_spark_host+":7077")
+    .setMaster("spark://"+spark_host+":7077")
 
 # generate a bunch of routes
 #POOL = redis.ConnectionPool(host='ec2-52-37-251-31.us-west-2.compute.amazonaws.com', port=6379, db=0)
-redis_conn = redis.StrictRedis(host = redis_spark_host, port = 6597)
+redis_conn = redis.Redis(host = redis_host, port = 6375, password = 'noredishackers')
+"""
 redis_conn.delete("faultering_userid")
 redis_conn.delete("race:update:users")
 redis_conn.delete("race:update:userid")
 redis_conn.delete("race:signoff:users")
 redis_conn.delete("race:singoff:userid")
+"""
 gen_route_info(redis_conn)
 # set up our contexts
 #sc = CassandraSparkContext(conf=conf)
 sc = SparkContext(conf=conf)
-sql = SQLContext(sc)
 stream = StreamingContext(sc, 1) # 1 second window
 
-mytopic = sys.argv[1]
-metalist = ','.join([ip + ":9092" for ip in sys.argv[2:]])
+metalist = ','.join([ip + ":9092" for ip in sys.argv[3:]])
 directKafkaStream = KafkaUtils.createDirectStream(stream, [mytopic], {"metadata.broker.list": metalist})
 user_req = directKafkaStream.map(lambda (k,v): json.loads(v))
-user_req.pprint()
 #user_req.foreachRDD(lambda rdd: rdd.foreach(processRecord))
 user_req.foreachRDD(lambda rdd: rdd.foreachPartition(processPartition))
 
