@@ -26,7 +26,7 @@ SUB_REQ_TYPE_UPDATE_ACCIDENT, SUB_REQ_TYPE_UPDATE_OTHER, SUB_REQ_TYPE_UPDATE_CLE
 
 def processPartition(iter):
 	print "before redis connection"
-	redis_conn = redis.Redis(host = redis_host, port = 6375, password = 'noredishackers')
+	redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishackers')
 	print "after redis connection"
 	for record in iter:
 		print "before calling create_db_recs"
@@ -36,7 +36,7 @@ def processPartition(iter):
 def processRecord(record):
 	#global POOL
 	#redis_conn = redis.Redis(connection_pool=POOL)
-	redis_conn = redis.Redis(host = redis_host, port = 6375, db = 0, password = 'noredishackers')
+	redis_conn = redis.Redis(host = redis_host, port = 6379, db = 0, password = 'noredishackers')
 	create_db_recs(redis_conn, record)
 
 def create_db_recs(redis_conn, user_req):
@@ -225,14 +225,12 @@ conf = SparkConf() \
 
 # generate a bunch of routes
 #POOL = redis.ConnectionPool(host='ec2-52-37-251-31.us-west-2.compute.amazonaws.com', port=6379, db=0)
-redis_conn = redis.Redis(host = redis_host, port = 6375, password = 'noredishackers')
-"""
+redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishackers')
 redis_conn.delete("faultering_userid")
 redis_conn.delete("race:update:users")
 redis_conn.delete("race:update:userid")
 redis_conn.delete("race:signoff:users")
 redis_conn.delete("race:singoff:userid")
-"""
 gen_route_info(redis_conn)
 # set up our contexts
 #sc = CassandraSparkContext(conf=conf)
