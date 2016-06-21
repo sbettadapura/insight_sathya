@@ -67,8 +67,8 @@ def notify_single_user(user):
 	pass
 
 def get_num_users(redis_conn):
-	if redis_conn.keys("users_cnt"):
-		return int(redis_conn.get("users_cnt"))
+	if redis_conn.keys("num_cumul_users"):
+		return int(redis_conn.get("num_cumul_users"))
 	else:
 		return 0
 
@@ -103,6 +103,7 @@ def db_user_register(redis_conn, user_req):
 	redis_conn.incr("num_routeid")
 	redis_conn.sadd("users", ' '.join([user_id, ts]))
 	redis_conn.incr("num_users")
+	redis_conn.incr("num_cumul_users")
 
 def db_user_signoff(redis_conn, user_req):
 	#now_ts = datetime.datetime.now().strftime(TS_FMT)
@@ -124,7 +125,11 @@ def db_user_signoff(redis_conn, user_req):
 	route_id = "route%d" % route_num
 	redis_conn.srem(route_id, user_id)
 	redis_conn.decr("num_routeid")
-	redis_conn.srem("users", ' '.join([user_id, ts1, ts2]))
+	res = redis_conn.srem("users", ' '.join([user_id, ts1, ts2]))
+	if res:
+		redis_conn.incr("num_users_removed")
+	else:
+		redis_conn.incr("num_users_not_removed")
 	redis_conn.decr("num_users")
 	redis_conn.delete(user_id)
 	redis_conn.decr("num_userid")

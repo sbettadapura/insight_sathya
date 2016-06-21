@@ -1,11 +1,10 @@
 #!/usr/bin/python
-from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 import datetime
-import random
 from random import randrange
 import sys
+import time
 import json
 
 TS_FMT = '%Y-%m-%d %H:%M:%S'
@@ -32,58 +31,40 @@ def gen_sub_req(req, sub_req):
 def gen_user_traffic():
 	x = randrange(50)
 	if x >= 0 and x < 5:
-		print "generting accident update"
+		#print "generting accident update"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_ACCIDENT)
 	elif x >= 5 and x < 25:
-		print "generting user register"
+		#print "generting user register"
 		return gen_req(REQ_TYPE_REGISTER)
 	elif x >= 25 and x < 32:
-		print "generting user query"
+		#print "generting user query"
 		return gen_req(REQ_TYPE_QUERY)
 	elif x >= 32 and x < 42:
-		print "generting user sign off"
+		#print "generting user sign off"
 		return gen_req(REQ_TYPE_SIGNOFF)
 	elif x >= 42 and x < 47:
-		print "generting user update other"
+		#print "generting user update other"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_OTHER)
 	elif x >= 45 and x < 50:
-		print "generting user update clear"
+		#print "generting user update clear"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_CLEAR)
 
 #This class will handles any incoming request from
 #the browser 
-class myHandler(BaseHTTPRequestHandler):
-	
-	#Handler for the GET requests
-	def do_GET(self):
-		#print "received GET request"
-		d = gen_user_traffic()
-		self.send_response(200)
-		self.send_header('Content-type','text/html')
-		self.end_headers()
-		# Send the html message
-		self.wfile.write("Hello World !")
-		if d is None:
-			return
-		try:
-			future = producer.send(sys.argv[1], d)
-			record_metadata = future.get(timeout=10)
-			print record_metadata.topic
-			print record_metadata.partition
-			print record_metadata.offset
-		except KafkaError:
-			print "Kafka error"
-			pass
-
-try:
-	#Create a web server and define the handler to manage the
-	#incoming request
-	server = HTTPServer(('', PORT_NUMBER), myHandler)
-	print 'Started httpserver on port ' , PORT_NUMBER
-	
-	#Wait forever for incoming htto requests
-	server.serve_forever()
-
-except KeyboardInterrupt:
-	print '^C received, shutting down the web server'
-	server.socket.close()
+def trigger_gen(topic):
+	d = gen_user_traffic()
+	try:
+		future = producer.send(topic, d)
+		#record_metadata = future.get(timeout=10)
+		#print record_metadata.topic
+		#print record_metadata.partition
+		#print record_metadata.offset
+	except KafkaError:
+		print "Kafka error"
+		pass
+if __name__ == "__main__":
+	topic = sys.argv[1]
+	rate = int(sys.argv[2])
+	while True:
+		trigger_gen(topic)
+		time.sleep(1.0/rate)
