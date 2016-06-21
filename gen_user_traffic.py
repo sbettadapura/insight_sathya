@@ -5,6 +5,7 @@ from kafka.errors import KafkaError
 import datetime
 import random
 from random import randrange
+import sys
 import json
 
 TS_FMT = '%Y-%m-%d %H:%M:%S'
@@ -65,7 +66,7 @@ class myHandler(BaseHTTPRequestHandler):
 		if d is None:
 			return
 		try:
-			future = producer.send('usertraffic', d)
+			future = producer.send(sys.argv[1], d)
 			record_metadata = future.get(timeout=10)
 			print record_metadata.topic
 			print record_metadata.partition
