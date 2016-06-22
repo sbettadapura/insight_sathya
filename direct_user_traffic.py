@@ -29,23 +29,23 @@ def gen_sub_req(req, sub_req):
 	return user_data
 
 def gen_user_traffic():
-	x = randrange(50)
-	if x >= 0 and x < 5:
+	x = randrange(905)
+	if x >= 0 and x < 1:
 		#print "generting accident update"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_ACCIDENT)
-	elif x >= 5 and x < 25:
+	elif x >= 1 and x < 300:
 		#print "generting user register"
 		return gen_req(REQ_TYPE_REGISTER)
-	elif x >= 25 and x < 32:
+	elif x >= 300 and x < 600:
 		#print "generting user query"
 		return gen_req(REQ_TYPE_QUERY)
-	elif x >= 32 and x < 42:
+	elif x >= 600 and x < 900:
 		#print "generting user sign off"
 		return gen_req(REQ_TYPE_SIGNOFF)
-	elif x >= 42 and x < 47:
+	elif x >= 900 and x < 902:
 		#print "generting user update other"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_OTHER)
-	elif x >= 45 and x < 50:
+	elif x >= 902 and x < 905:
 		#print "generting user update clear"
 		return gen_sub_req(REQ_TYPE_UPDATE, SUB_REQ_TYPE_UPDATE_CLEAR)
 

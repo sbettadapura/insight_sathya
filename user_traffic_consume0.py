@@ -24,37 +24,42 @@ REQ_TYPE_REGISTER, REQ_TYPE_SIGNOFF, REQ_TYPE_QUERY, REQ_ADD_ROUTE, REQ_TYPE_UPD
 
 SUB_REQ_TYPE_UPDATE_ACCIDENT, SUB_REQ_TYPE_UPDATE_OTHER, SUB_REQ_TYPE_UPDATE_CLEAR, SUB_REQ_TYPE_UPDATE_POS = range(4)
 
-def sendPartition(iter):
-	redis_conn = redis.StrictRedis(host = redis_host, port = 6379)
+def processPartition(iter):
+	redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishackers')
 	for record in iter:
-		print record
-		redis_conn.incr("num_recs_recvd")
 		create_db_recs(redis_conn, record)
+
+def processRecord(record):
+	#global POOL
+	#redis_conn = redis.Redis(connection_pool=POOL)
+	redis_conn = redis.Redis(host = redis_host, port = 6379, db = 0, password = 'noredishackers')
+	create_db_recs(redis_conn, record)
 
 def create_db_recs(redis_conn, user_req):
 	req_type = user_req['req_type']
 	if req_type == REQ_TYPE_REGISTER:
 		db_user_register(redis_conn, user_req)
 	elif req_type == REQ_TYPE_SIGNOFF:
-			db_user_signoff(redis_conn, user_req)
+		db_user_signoff(redis_conn, user_req)
 	elif req_type == REQ_TYPE_QUERY:
-			db_user_query(redis_conn, user_req)
+		db_user_query(redis_conn, user_req)
 	elif req_type == REQ_TYPE_UPDATE:
 		sub_req_type = user_req["sub_req_type"]
 		if sub_req_type == SUB_REQ_TYPE_UPDATE_CLEAR:
+			#db_incident_clear_dummy(redis_conn, user_req)
 			db_incident_clear(redis_conn, user_req)
 		else:
 			db_incident_update(redis_conn, user_req, sub_req_type)
 
-def notify_user(users):
+def notify_users(users):
 	pass
 
 def notify_single_user(user):
 	pass
 
 def get_num_users(redis_conn):
-	if redis_conn.exists("users"):
-		return redis_conn.scard("users")
+	if redis_conn.keys("num_cumul_users"):
+		return int(redis_conn.get("num_cumul_users"))
 	else:
 		return 0
 
@@ -74,6 +79,7 @@ def get_route_endpoints(redis_conn, route_num):
 	return map(int, x.split())
 
 def db_user_register(redis_conn, user_req):
+	redis_conn.incr("calls:users_register")
 	user_id = "user%d" % get_num_users(redis_conn)
 	route_num = randrange(get_num_routes(redis_conn))
 	route_id = "route%d" % route_num
@@ -83,98 +89,123 @@ def db_user_register(redis_conn, user_req):
 	end = randrange(start, route_end)
 
 	redis_conn.set(user_id, ' '.join([str(route_num), str(start)]))
+	redis_conn.incr("num_userid")
 	redis_conn.sadd(route_id, user_id)
+	redis_conn.incr("num_routeid")
 	redis_conn.sadd("users", ' '.join([user_id, ts]))
+	redis_conn.incr("num_users")
+	redis_conn.incr("num_cumul_users")
 
 def db_user_signoff(redis_conn, user_req):
-	now_ts = datetime.datetime.now().strftime(TS_FMT)
-	user_id, ts1, ts2 = redis_conn.srandmember("users").split()
-	ts = ts1 + ' ' + ts2
-	route_num, loc = map(int, redis_conn.get(user_id).split())
+	#now_ts = datetime.datetime.now().strftime(TS_FMT)
+	x = redis_conn.srandmember("users")
+	if x is None:
+		redis_conn.incr("race:signoff:users")
+		return
+	user_id, ts1, ts2 = x.split()
+	x = redis_conn.get(user_id)
+	if x is None:
+		redis_conn.incr("race:singoff:userid")
+		return
+	redis_conn.incr("calls:users_signoff")
+	route_num, loc = map(int, x.split())
+	"""
 	user_time = (datetime.strptime(now_ts, (TS_FMT)) - \
 				datetime.strptime(ts, (TS_FMT))).total_seconds()
+	"""
 	route_id = "route%d" % route_num
 	redis_conn.srem(route_id, user_id)
-	redis_conn.srem("users", ' '.join([user_id, ts]))
+	redis_conn.decr("num_routeid")
+	res = redis_conn.srem("users", ' '.join([user_id, ts1, ts2]))
+	if res:
+		redis_conn.incr("num_users_removed")
+	else:
+		redis_conn.incr("num_users_not_removed")
+	redis_conn.decr("num_users")
+	redis_conn.delete(user_id)
+	redis_conn.decr("num_userid")
 
 def db_user_query(redis_conn, user_req):
+	redis_conn.incr("calls:user_query")
 	route_num = randrange(get_num_routes(redis_conn))
 	route_start, route_end = get_route_endpoints(redis_conn, route_num)
 	start = randrange(route_start, route_end)
 	end = randrange(start, route_end)
 	if redis_conn.sismember("route_incidents", str(route_num)):
+		pass
+		"""
 		if start <= loc and loc <= end:
-			user_to_be_notified = redis_conn.srandmember("route%d" % route_num)
+			user_to_be_notified = \
+				redis_conn.srandmember("route%d" % route_num)
 			notify_single_user(user_to_be_notified)
+		"""
 
-def db_incident_update(redis_conn, user_req):
-	user_id, ts1, ts2 = redis_conn.srandmember("users").split()
-	ts = ts1 + ' ' + ts2
-	rand_route_num = randrange(get_num_routes(redis_conn))
-	rand_route_id = "route%d" % rand_route_num
-	route_start, route_end = get_route_endpoints(redis_conn, rand_route_num)
-	rand_loc = randrange(route_start, route_end)
-	sub_update_type = random.choice[REQ_UPDATE_ACCIDENT, ROUTE_UPDATE_OTHER]
-	ts = datetime.datetime.now().strftime(TS_FMT)
-	redis_conn.sadd("incidents", \
+def db_incident_update(redis_conn, user_req, sub_req_type):
+	x = redis_conn.srandmember("users")
+	if x is None:
+		return
+	user_id, ts1, ts2 = x.split()
+	x = redis_conn.get(user_id)
+	if x is None:
+		redis_conn.incr("race:update:userid")
+		return
+	redis_conn.incr("calls:incident_update")
+	rand_route_num, rand_loc = map(int, x.split())
+	#now_ts = datetime.datetime.now().strftime(TS_FMT)
+	redis_conn.incr("num_incidents")
+	route_incident_id = "route_incident%d" % rand_route_num
+	redis_conn.sadd(route_incident_id, \
 			' '.join([user_id, str(rand_route_num), str(rand_loc), \
-				str(sub_update_type), ts]))
-	redis_conn.sadd("route_incidents", str(route_num))
+			str(sub_req_type), ts1, ts2]))
+	rand_route_id = "route%d" % rand_route_num
 	users_on_route = redis_conn.smembers(rand_route_id)
 	users_to_be_notified = set()
 	for user in users_on_route:
-		route_num, loc = redis_conn.get(user_id)
+		route_num, loc = map(int, redis_conn.get(user_id).split())
 		if rand_loc - loc >= 1:
 			users_to_be_notified.add(user)
 	notify_users(users_to_be_notified)
+	redis_conn.incr("stats:incident_update")
 
+def db_incident_clear_dummy(redis_conn, user_req):
+	pass
 def db_incident_clear(redis_conn, user_req):
-	now_ts = datetime.datetime.now().strftime(TS_FMT)
-	found_rand_incident = False
-	while not found_rand_incident:
-		rand_route_num = redis_conn.srandmember("route_incidents")
-		for y in redis_conn.smembers("incidents"):
-			x = y.split()
-			user_id = x[0]
-			route_num = int(x[1])
-			rand_loc = int(x[2])
-			sub_update_tye = int(x[3])
-			ts = ts1 + ' ' + ts2
-			if route_num == rand_route_num and \
-				datetime.strptime(now_ts, (TS_FMT)) - \
-				datetime.strptime(ts, (TS_FMT)) > datetime.timedelta(0, 60):
-				found_rand_incident = True
-				break
-	redis_conn.srem("incidents", \
-			' '.join([user_id, str(route_num), str(rand_loc), \
-				str(sub_update_type), ts]))
-	redis_conn.srem("route_incidents", str(rand_route_num))
+	#now_ts = datetime.datetime.now().strftime(TS_FMT)
+	rand_route_num = randrange(get_num_routes(redis_conn))
+	route_incident_id = "route_incident%d" % rand_route_num
+	incident = redis_conn.srandmember(route_incident_id)
+	if incident:
+		redis_conn.srem(route_incident_id, incident)
+		redis_conn.incr("calls:incident_clear")
+		x = incident.split()
+		user_id = x[0]
+		route_num = int(x[1])
+		rand_loc = int(x[2])
+		sub_update_type = int(x[3])
+		ts1 = x[4]
+		ts2 = x[5]
 
-
-redis_host = sys.argv[1]
+mytopic = sys.argv[1]
+redis_host = sys.argv[2]
+spark_host = sys.argv[3]
 conf = SparkConf() \
     .setAppName("PySpark Redis Test") \
-    .setMaster("spark://"+redis_host+":7077")
+    .setMaster("spark://"+spark_host+":7077")
 
 # generate a bunch of routes
-redis_conn = redis.StrictRedis(host = redis_host, port = 6379)
+#POOL = redis.ConnectionPool(host='ec2-52-37-251-31.us-west-2.compute.amazonaws.com', port=6379, db=0)
+redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishackers')
 gen_route_info(redis_conn)
 # set up our contexts
 #sc = CassandraSparkContext(conf=conf)
 sc = SparkContext(conf=conf)
-sql = SQLContext(sc)
 stream = StreamingContext(sc, 1) # 1 second window
 
-"""
-kafka_stream = KafkaUtils.createStream(stream, \
-                                       "localhost:2181", \
-                                       "raw-event-streaming-consumer",
-                                        {"user_traffic":1})
-"""
-
-directKafkaStream = KafkaUtils.createDirectStream(stream, ["user_traffic"], {"metadata.broker.list": "ec2-52-37-251-31.us-west-2.compute.amazonaws.com:9092, ec2-52-40-170-121.us-west-2.compute.amazonaws.com:9092, ec2-52-40-108-38.us-west-2.compute.amazonaws.com:9092, ec2-52-37-124-123.us-west-2.compute.amazonaws.com:9092"})
+metalist = ','.join([ip + ":9092" for ip in sys.argv[3:]])
+directKafkaStream = KafkaUtils.createDirectStream(stream, [mytopic], {"metadata.broker.list": metalist})
 user_req = directKafkaStream.map(lambda (k,v): json.loads(v))
-user_req.foreachRDD(lambda rdd: rdd.foreachPartition(sendPartition))
+#user_req.foreachRDD(lambda rdd: rdd.foreach(processRecord))
+user_req.foreachRDD(lambda rdd: rdd.foreachPartition(processPartition))
 
 stream.start()
 stream.awaitTermination()
