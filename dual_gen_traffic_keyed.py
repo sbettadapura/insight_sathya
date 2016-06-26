@@ -64,7 +64,7 @@ def trigger_gen():
 		#print topic, d, kafka_key
 		#future = producer.send(topic, d, key = kafka_key, partition = kafka_key)
 		#future = producer.send(topic, d, key = bytes(str(kafka_key)), partition = kafka_key)
-		future = producer.send(topic, d)
+		future = producer.send(topic, d, key = str(kafka_key))
 		#future = producer.send(topic, d, partition = kafka_key)
 		#record_metadata = future.get(timeout=1000)
 		#print record_metadata.topic
