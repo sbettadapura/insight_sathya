@@ -2,7 +2,9 @@
 
 import redis
 import sys
+import os
 import time
+import psycopg2
 from collections import defaultdict
 
 TYPE_CLEAR, TYPE_INCIDENT, TYPE_USERS = range(3)
@@ -13,17 +15,41 @@ redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishack
 route_expect = dict((i, TYPE_INCIDENT) for i in range(100))
 incident_location = defaultdict(int)
 
-def historical_stats_duration(*args):
-	pass
+HOST = os.environ['REDSHIFT_HOST']
+PORT = 5439 # redshift default
+USER = os.environ['REDSHIFT_USER']
+PASSWORD = os.environ['REDSHIFT_PASSWD']
+DATABASE = os.environ['REDSHIFT_DATABASE']
 
-def historical_stats_users(*args):
-	pass
+def db_connection():
+	conn = psycopg2.connect(
+	host=HOST,
+	port=PORT,
+	user=USER,
+	password=PASSWORD,
+	database=DATABASE,
+    )
+
+	return conn
+
+def historical_stats_duration(accident_tod, accident_route_num, \
+			incident_location, accident_duration):
+	conn = db_connection()
+	cursor = conn.cursor()
+	x = "users_total_on_route_%d" % accident_route_num
+	total_users = int(redis_conn.get(x))
+	x = "users_affected_on_route_%d" % accident_route_num
+	affected_users = int(redis_conn.get(x))
+	cursor.execute("INSERT INTO hist_traffic VALUES(%s, %s, %s, %s, %s, %s)", \
+			(accident_tod, accident_route_num, incident_location,\
+			total_users, affected_users, accident_duration))
+	conn.commit()
 
 def process_users(redis_conn, rec, user_route_num, incident_loc):
 	accident_day, accident_tod = None, None
 	affected_users = 0
 	total_users = len(rec) / 4
-	redis_conn.incr("curr:users_total", total_users)
+	redis_conn.incr("users_total", total_users)
 	for i in range(0, len(rec), 4):
 		user_loc = int(rec[i])
 		user_id = rec[i + 1]
@@ -34,13 +60,12 @@ def process_users(redis_conn, rec, user_route_num, incident_loc):
 		if user_loc > incident_loc and incident_loc - user_loc <= 2:
 			affected_users += 1
 
-	x = "curr:users_on_route_cnt_%d" % user_route_num
+	x = "users_total_on_route_%d" % user_route_num
 	redis_conn.incr(x, total_users)
-	x = "curr:route_incident_users_%d" % user_route_num
+	x = "users_affected_on_route_%d" % user_route_num
 	redis_conn.incr(x, affected_users)
-	redis_conn.incr("curr:users_affected_cnt", affected_users)
-	historical_stats_users(user_route_num, incident_loc, accident_day, \
-						accident_tod, total_users, affected_users)
+	redis_conn.incr("users_affected", affected_users)
+
 while True:
 	type_rec = redis_conn.lpop("raw_input")
 	if type_rec is None:
@@ -54,23 +79,32 @@ while True:
 		else:
 			loc = int(type_rec.split()[2])
 			if incident_location[accident_route_num] == 0:
-				redis_conn.incr("curr:routes_affected")
+				redis_conn.incr("routes_affected")
 			incident_location[accident_route_num] = loc
-			redis_conn.incr("curr:incidents_reported_cnt")
-			x = "curr:route_inc_occur_cnt%d" % accident_route_num
+			redis_conn.incr("incidents_reported")
+			x = "incidents_reported_on_route_%d" % accident_route_num
 			redis_conn.incr(x)
+			x = "incident_on_route_%d" % accident_route_num
+			redis_conn.set(x, str(loc))
+
 			route_expect[accident_route_num] = TYPE_USERS
 	elif type == TYPE_CLEAR:
 		if route_expect[accident_route_num] != TYPE_CLEAR:
 			pass # ignore
 		else:
-			redis_conn.incr("curr:incidents_cleared_cnt")
+			redis_conn.incr("incidents_cleared")
+			x = "incidents_cleared_on_route_%d" % accident_route_num
+			redis_conn.incr(x)
 			accident_duration = int(type_rec.split()[6])
 			accident_day, accident_tod = type_rec.split()[3:5]
-			historical_stats_duration(accident_route_num,\
-						incident_location[accident_route_num],\
-						accident_day, accident_tod, accident_duration)
+			accident_ts = ' '.join([accident_day, accident_tod])
+			historical_stats_duration(accident_ts, \
+				accident_route_num,\
+				incident_location[accident_route_num],\
+				accident_duration)
 			incident_location[accident_route_num] = 0
+			x = "incident_on_route_%d" % accident_route_num
+			redis_conn.delete(x)
 			route_expect[accident_route_num] = TYPE_INCIDENT
 	elif type == TYPE_USERS:
 		if route_expect[accident_route_num] != TYPE_USERS:
