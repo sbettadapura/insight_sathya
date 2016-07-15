@@ -24,6 +24,7 @@ def init_route_inc_ids(redis_conn):
 		redis_conn.set(route_inc_id, 0)
 
 def processPartition(iter):
+	print "in processPartition()"
 	redis_conn = redis.Redis(host = redis_host, port = 6379, password = 'noredishackers')
 	for record in iter:
 		create_db_recs(redis_conn, record)
@@ -71,8 +72,9 @@ user_pos = directKafkaStream_pos.map(lambda (k,v): json.loads(v)).map((lambda(v)
 user_join = user_accident.join(user_pos)
 #user_join.pprint()
 user_filter = user_join.filter(lambda (k, v): v[1][0] > v[0][0] and v[1][0] - v[0][0] <= 2)
-user_filter.pprint(num=1)
-user_filter.mapPartitions(processPartition)
+#user_filter.pprint(num=1)
+#user_filter.mapPartitions(processPartition)
+user_filter.foreachRDD(lambda rdd: rdd.foreachPartition(processPartition))
 
 stream.start()
 stream.awaitTermination()

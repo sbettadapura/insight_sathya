@@ -42,7 +42,16 @@ def gen_update_accident():
 	rand_route_num = randrange(NUM_ROUTES)
 	start,end = list(route_dict[rand_route_num])
 	rand_loc = randrange(start, end)
-	user_data = {"incident_route_num" : rand_route_num, "incident_loc" : rand_loc, "ts": ts} 
+	user_data = {"incident_route_num" : rand_route_num, "incident_loc" : rand_loc, "ts": ts, "occur_clear" : 1, "accident_duration": 0} 
+	kafka_key = rand_route_num % NUM_PARTITIONS
+	return (kafka_key, user_data)
+
+def gen_clear_accident():
+	ts = datetime.datetime.now().strftime(TS_FMT)
+	rand_route_num = randrange(NUM_ROUTES)
+	start,end = list(route_dict[rand_route_num])
+	rand_loc = randrange(start, end)
+	user_data = {"incident_route_num" : rand_route_num, "incident_loc" : rand_loc, "ts": ts, "occur_clear" : 0, "accident_duration": randrange(5, 15)} 
 	kafka_key = rand_route_num % NUM_PARTITIONS
 	return (kafka_key, user_data)
 
@@ -51,7 +60,10 @@ def gen_user_traffic():
 	if x >= 0 and x < 2:
 		kafka_key, data = gen_update_accident()
 		return ("user_accident", data, kafka_key)
-	elif x >= 2 and x < 100:
+	if x >= 2 and x < 4:
+		kafka_key, data = gen_clear_accident()
+		return ("user_accident", data, kafka_key)
+	elif x >= 4 and x < 100:
 		kafka_key, data = gen_update_pos()
 		return ("user_pos", data, kafka_key)
 
